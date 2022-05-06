@@ -1,0 +1,49 @@
+select 
+		  oi.Consultant_id 
+		 , count(oi.Consultant_id ) as sum_cons
+		--, dg.GoodsArticle
+		--, dg.fg0
+		, dg.fg1
+		, dg.fg2
+		, dg.fg3	
+		, dd.PeriodName2
+
+		, SUM(oi.GoodsCount - isnull(ret.RETURNNCOUNT , 0)) AS opQty
+
+
+from dwh.[OrderItem] as oi
+	inner join dmt.[DimGoods] as dg on oi.Goods_id = dg.Goods_id
+	inner join dmt.[DimDate] as dd on oi.OrderApprovedDate = dd.Date_
+	left join (select promo_id from dmt.DimPromo as pr
+				where pr.RefValueCode like N'%exclusive%'
+					or pr.RefValueCode like N'%step[_]1%'
+					 ) as pr on oi.Promo_id = pr.Promo_id
+	left join dwh.CurrencyRateEachDay as c on c.Currency = oi.Currency_id and c.Date = oi.OrderApprovedDate
+	LEFT JOIN 
+		( SELECT cod.OrderItem_id, 
+				  sum (cod.GoodsCount) as RETURNNCOUNT -- перетензии одобренные
+		  FROM dwh.ClaimOrderDetail as cod	
+		  WHERE ActionRefValue_id = 206793 -- код одобренной претензии 
+		  GROUP BY cod.OrderItem_id
+		  ) as Ret on  oi.OrderItem_id = Ret.OrderItem_id
+
+
+
+where dd.PeriodNumber between  441 and 450 -- 459 --  > 441 = 14/2021
+	    and oi.OrderType_id not in (select DocumentType_id from dwh.DocumentType where TypeCode in (N'RETURN', N'RETURN_FUTURE', N'PROMO_POOL'))
+		and oi.OrderState_id not in (select State_id from dwh.Status where StateName = N'ORDER_RETURNED')
+		and oi.store_id not in (select store_id from dmt.dimStore where CountryOwnerDP = N'РФ')
+
+group by
+		  oi.Consultant_id
+		, dd.PeriodName2
+		  
+		--, dg.GoodsArticle
+		--, dg.fg0
+		, dg.fg1
+		, dg.fg2
+		, dg.fg3
+
+
+order by oi.Consultant_id, dd.PeriodName2
+
